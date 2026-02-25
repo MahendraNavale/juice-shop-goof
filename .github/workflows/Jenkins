@@ -1,0 +1,71 @@
+pipeline {
+    agent any
+    
+    environment {
+        // Store Snyk API token as Jenkins credential
+        SNYK_TOKEN = credentials('snyk-token')
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                // Clone your Git repository
+                git branch: 'master',
+                    url: 'https://github.com/mahaboob8/juice-shop-goof.git',
+                    credentialsId: 'GIt_P'
+            }
+        }
+        
+        stage('Install Snyk') {
+            steps {
+                script {
+                    // Install Snyk CLI
+                    sh '''
+                        curl -Lo snyk https://static.snyk.io/cli/latest/snyk-linux
+                        chmod +x snyk
+                        sudo mv snyk /usr/local/bin/
+                    '''
+                }
+            }
+        }
+        
+        stage('Snyk Authentication') {
+            steps {
+                // Authenticate with Snyk
+                sh 'snyk auth $SNYK_TOKEN'
+            }
+        }
+        
+        stage('Snyk Test') {
+            steps {
+                script {
+                    // Run Snyk test
+                    sh '''
+                        snyk test --all-projects --severity-threshold=high
+                    '''
+                }
+            }
+        }
+        
+        stage('Snyk Monitor') {
+            steps {
+                // Send results to Snyk for continuous monitoring
+                sh 'snyk monitor --all-projects'
+            }
+        }
+    }
+    
+    post {
+        always {
+            // Archive results
+            archiveArtifacts artifacts: '**/snyk-report.json', allowEmptyArchive: true
+        }
+        failure {
+            // Send notification on failure
+            echo 'Snyk test found vulnerabilities!'
+        }
+        success {
+            echo 'Snyk test passed successfully!'
+        }
+    }
+}
